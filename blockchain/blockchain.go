@@ -260,3 +260,20 @@ func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
 
 	return Transaction{}, errors.New("Transaction does not exist")
 }
+
+func (bc *Blockchain) VerifyTransaction(tx *Transaction) bool {
+
+	if tx.isCoinbase() {
+		return true
+	}
+
+	prevTxs := make(map[string]Transaction)
+
+	for _, in := range tx.Inputs {
+		prevTx, err := bc.FindTransaction(in.ID)
+		Handler(err)
+		prevTxs[hex.EncodeToString(prevTx.ID)] = prevTx
+	}
+
+	return tx.Verify(prevTxs)
+}

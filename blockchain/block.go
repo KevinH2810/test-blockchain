@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/gob"
 	"log"
 )
@@ -61,14 +60,13 @@ func Deserialize(data []byte) *Block {
 func (b *Block) HashTransactions() []byte {
 	var (
 		txHashes [][]byte
-		txHash   [32]byte
 	)
 
 	for _, tx := range b.Transaction {
-		txHashes = append(txHashes, tx.ID)
+		txHashes = append(txHashes, tx.Serialize())
 	}
 
-	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
+	tree := NewMerkleTree(txHashes)
 
-	return txHash[:]
+	return tree.RootNode.Data
 }

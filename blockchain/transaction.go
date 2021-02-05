@@ -24,16 +24,21 @@ type (
 	}
 )
 
+//CoinbaseTx is reward function
 func CoinbaseTx(to, data string) *Transaction {
 	if data == "" {
-		data = fmt.Sprintf("Coin to %s", to)
+		randData := make([]byte, 24)
+		_, err := rand.Read(randData)
+		Handler(err)
+
+		data = fmt.Sprintf("%x", randData)
 	}
 
 	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTxOutput(100, to)
+	txout := NewTxOutput(20, to)
 
 	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}}
-	tx.SetID()
+	tx.ID = tx.Hash()
 
 	return &tx
 }

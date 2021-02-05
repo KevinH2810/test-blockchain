@@ -181,7 +181,10 @@ func (cli *CommandLine) send(Sender, Receiver string, amount int) {
 
 	tx := blockchain.NewTransaction(Sender, Receiver, amount, chain)
 
-	chain.AddBlock([]*blockchain.Transaction{tx})
+	//gonna change this later so that the winner of the PoS will get the rewards
+	cbTx := blockchain.CoinbaseTx(Sender, "")
+
+	chain.AddBlock([]*blockchain.Transaction{cbTx, tx})
 	fmt.Println("Success!")
 }
 
