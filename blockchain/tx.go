@@ -33,8 +33,8 @@ func (in *TxInput) UsesKey(pubKeyHash []byte) bool {
 }
 
 func (out *TxOutput) Lock(address []byte) {
-	pubKeyHash := wallet.Base58Decode(address)
-	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	fullhash := wallet.Base58Decode(address)
+	pubKeyHash := fullhash[0 : len(fullhash)-4]
 	out.PubKeyHash = pubKeyHash
 }
 

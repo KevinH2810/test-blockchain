@@ -46,7 +46,7 @@ func NewTransaction(Sender, Receiver string, amount int, chain *Blockchain) *Tra
 
 	wallets, err := wallet.CreateWallet()
 	Handler(err)
-	w := wallets.GetWalletBalanceFromAddress(Sender)
+	w := wallets.GetWalletFromAddress(Sender)
 	pubKeyHash := wallet.PublicKeyHash(w.Publickey)
 	acc, validOutputs := chain.FindSpendableOutputs(pubKeyHash, amount)
 
@@ -217,7 +217,7 @@ func (tx Transaction) String() string {
 	return strings.Join(lines, "\n")
 }
 
-func (bc *Blockchain) SignTransaction(tx *Transaction, privKey rsa.PrivateKey) {
+func (bc *Blockchain) SignTransaction(tx *Transaction, privKey []byte) {
 	prevTXs := make(map[string]Transaction)
 
 	for _, in := range tx.Inputs {
@@ -226,5 +226,10 @@ func (bc *Blockchain) SignTransaction(tx *Transaction, privKey rsa.PrivateKey) {
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 
-	tx.Sign(&privKey, prevTXs)
+	parsedPrivKey, err := x509.ParsePKCS1PrivateKey(privKey)
+	if err != nil {
+		log.Panic("Error = ", err)
+	}
+
+	tx.Sign(parsedPrivKey, prevTXs)
 }

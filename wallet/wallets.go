@@ -29,7 +29,7 @@ func CreateWallet() (*Wallets, error) {
 	return &wallets, err
 }
 
-func (ws Wallets) GetWalletBalanceFromAddress(address string) Wallet {
+func (ws Wallets) GetWalletFromAddress(address string) Wallet {
 	return *ws.Wallets[address]
 }
 
