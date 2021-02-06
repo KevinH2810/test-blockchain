@@ -221,8 +221,13 @@ func (cli *CommandLine) send(Sender, Receiver, NodeId string, amount int, propos
 
 	tx := blockchain.NewTransaction(&wallet, Sender, Receiver, amount, &UTXOSet)
 
+	fmt.Println(tx)
+
 	if proposeForge {
 		//after we make the transaction proposal, we sent it
+		if Receiver != "" {
+			log.Panic("please empty the sender address")
+		}
 		cbTx := blockchain.CoinbaseTx(Sender, "", amount)
 		network.SendTx(network.KnownNodes[0], cbTx)
 		fmt.Println("Transaction Proposal has been sent")

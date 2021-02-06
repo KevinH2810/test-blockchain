@@ -39,7 +39,9 @@ func DBexists(path string) bool {
 }
 
 func retry(dir string, originalOpts badger.Options) (*badger.DB, error) {
+	fmt.Println("path - ", dir)
 	lockPath := filepath.Join(dir, "LOCK")
+	fmt.Println("lockPath - ", lockPath)
 	if err := os.Remove(lockPath); err != nil {
 		return nil, fmt.Errorf(`removing "LOCK": %s`, err)
 	}
@@ -68,14 +70,15 @@ func InitBlockchain(address, nodeID string) *Blockchain {
 	var lastHash []byte
 
 	path := fmt.Sprintf(dbPath, nodeID)
+
 	if DBexists(path) {
 		fmt.Println("Blockchain Already Exists")
 		runtime.Goexit()
 	}
 
 	opts := badger.DefaultOptions
-	opts.Dir = dbPath
-	opts.ValueDir = dbPath
+	opts.Dir = path
+	opts.ValueDir = path
 
 	db, err := openDB(path, opts)
 	Handler(err)
@@ -110,8 +113,8 @@ func NormalBlockchainProcess(nodeID string) *Blockchain {
 	}
 
 	opts := badger.DefaultOptions
-	opts.Dir = dbPath
-	opts.ValueDir = dbPath
+	opts.Dir = path
+	opts.ValueDir = path
 
 	db, err := openDB(path, opts)
 	Handler(err)

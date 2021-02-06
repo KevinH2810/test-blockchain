@@ -26,16 +26,17 @@ const (
 )
 
 var (
-	nodeAddress     string
-	validateAddress string
-	KnownNodes      = []string{"localhost:10111", "localhost:10112", "localhost:10113", "localhost:10114"}
-	blocksInTransit = [][]byte{}
-	memoryPool      = make(map[string]blockchain.Transaction)
-	tempTxPool      []string
-	tempStakeTxPool = make(map[string]blockchain.Transaction)
-	candidateTxs    = make(chan blockchain.Transaction)
-	currentChain    *blockchain.Blockchain
-	validator       = make(map[string]int)
+	nodeAddress        string
+	validateAddress    string
+	KnownNodes         = []string{"localhost:10111", "localhost:10112", "localhost:10113", "localhost:10114"}
+	blocksInTransit    = [][]byte{}
+	memoryPool         = make(map[string]blockchain.Transaction)
+	tempTxPool         []string
+	tempStakeTxPool    = make(map[string]blockchain.Transaction)
+	candidateTxs       = make(chan blockchain.Transaction)
+	currentChain       *blockchain.Blockchain
+	validator          = make(map[string]int)
+	validatorBlacklist []string
 )
 
 type (
@@ -142,7 +143,11 @@ func StartServer(nodeID, ForgerAddress string, forgeTime uint64) {
 		go func() {
 			for candidateTx := range candidateTxs {
 				mutex.Lock()
-				tempStakeTxPool[hex.EncodeToString(candidateTx.ID)] = candidateTx
+				if chain.VerifyTransaction(&candidateTx) {
+					tempStakeTxPool[hex.EncodeToString(candidateTx.ID)] = candidateTx
+				} else {
+					validatorBlacklist = append(validatorBlacklist, candidateTx.Inputs[0].SenderAddress)
+				}
 				mutex.Unlock()
 			}
 		}()
@@ -498,7 +503,10 @@ func HandleStakeTx(request []byte, chain *blockchain.Blockchain) {
 	txData := payload.Transaction
 	tx := blockchain.DeserializeTransaction(txData)
 	memoryPool[hex.EncodeToString(tx.ID)] = tx
-	candidateTxs <- tx
+
+	if isBlacklist(validatorBlacklist, tx) == false {
+		candidateTxs <- tx
+	}
 
 	fmt.Printf("%s, %d", nodeAddress, len(memoryPool))
 
@@ -543,4 +551,14 @@ func SendGetData(address, kind string, id []byte) {
 	request := append(CmdToBytes("getdata"), payload...)
 
 	SendData(address, request)
+}
+
+func isBlacklist(validatorBlacklist []string, tx blockchain.Transaction) bool {
+	for _, blacklistValidator := range validatorBlacklist {
+		if tx.Inputs[0].SenderAddress == blacklistValidator {
+			return true
+		}
+	}
+
+	return false
 }
