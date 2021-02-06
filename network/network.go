@@ -294,6 +294,7 @@ func SendStakeTx(addr string, tnx *blockchain.Transaction) {
 		log.Panic("Address is not in the list of Known Nodes")
 	}
 	data := Tx{nodeAddress, tnx.Serialize()}
+	fmt.Println("sendStakeTx = ", tnx)
 	payload := GobEncode(data)
 
 	request = append(CmdToBytes("Staketx"), payload...)
@@ -373,9 +374,6 @@ func HandleBlock(request []byte, chain *blockchain.Blockchain) {
 		SendGetData(payload.AddrFrom, "block", blockHash)
 
 		blocksInTransit = blocksInTransit[1:]
-	} else {
-		UTXOSet := blockchain.UTXOSet{chain}
-		UTXOSet.Reindex()
 	}
 }
 

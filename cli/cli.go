@@ -75,7 +75,6 @@ func (cli *CommandLine) Run() {
 	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
 	createNewWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
 	getAllWalletAddressCmd := flag.NewFlagSet("getaddress", flag.ExitOnError)
-	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
 
 	getBalanceAddress := getBalanceCmd.String("address", "", "the address of ownder")
@@ -117,11 +116,6 @@ func (cli *CommandLine) Run() {
 		if err != nil {
 			log.Panic(err)
 		}
-	case "reindexutxo":
-		err := reindexUTXOCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
 	default:
 		cli.printUsage()
 		runtime.Goexit()
@@ -137,10 +131,6 @@ func (cli *CommandLine) Run() {
 
 	if getAllWalletAddressCmd.Parsed() {
 		cli.listWalletAddress(nodeID)
-	}
-
-	if reindexUTXOCmd.Parsed() {
-		cli.reindexUTXO(nodeID)
 	}
 
 	if getBalanceCmd.Parsed() {
@@ -196,22 +186,21 @@ func (cli *CommandLine) createBlockchain(address, NodeId string) {
 
 func (cli *CommandLine) getBalance(address, NodeId string) {
 	if !wallet.ValidateAddress(address) {
-		log.Panic("Address is not valid!")
+		log.Panic("Address is not Valid")
 	}
 	chain := blockchain.NormalBlockchainProcess(NodeId)
-	UTXOSet := blockchain.UTXOSet{chain}
 	defer chain.Database.Close()
 
 	balance := 0
 	pubKeyHash := wallet.Base58Decode([]byte(address))
-	pubKeyHash = pubKeyHash[:len(pubKeyHash)-1]
-	unspentTXOs := UTXOSet.FindUnspentTransactions(pubKeyHash)
+	pubKeyHash = pubKeyHash[:len(pubKeyHash)-4]
+	UTXOs := chain.FindUTXO(pubKeyHash)
 
-	for _, out := range unspentTXOs {
+	for _, out := range UTXOs {
 		balance += out.Value
 	}
 
-	fmt.Printf("Balance of address %s: %d\n", address, balance)
+	fmt.Printf("Balance of %s: %d\n", address, balance)
 }
 
 //send function with param Sender, Receiver and Amount. to send normal sendTx function
@@ -226,16 +215,15 @@ func (cli *CommandLine) send(Sender, Receiver, NodeId string, amount int) {
 	}
 
 	chain := blockchain.NormalBlockchainProcess(NodeId)
-	UTXOSet := blockchain.UTXOSet{chain}
 	defer chain.Database.Close()
 
 	wallets, err := wallet.CreateWallet(NodeId)
 	if err != nil {
 		log.Panic(err)
 	}
-	wallet := wallets.GetWalletFromAddress(NodeId)
+	wallet := wallets.GetWalletFromAddress(Sender)
 
-	tx := blockchain.NewTransaction(&wallet, Sender, Receiver, amount, &UTXOSet)
+	tx := blockchain.NewTransaction(&wallet, Sender, Receiver, amount, chain)
 
 	fmt.Println(tx)
 
@@ -271,23 +259,24 @@ func (cli *CommandLine) sendStake(Sender, NodeId string, amount int) {
 	}
 
 	chain := blockchain.NormalBlockchainProcess(NodeId)
-	UTXOSet := blockchain.UTXOSet{chain}
 	defer chain.Database.Close()
 
 	wallets, err := wallet.CreateWallet(NodeId)
+
 	if err != nil {
 		log.Panic(err)
 	}
-	wallet := wallets.GetWalletFromAddress(NodeId)
 
-	tx := blockchain.NewTransaction(&wallet, Sender, "", amount, &UTXOSet)
+	wallet := wallets.GetWalletFromAddress(Sender)
+
+	tx := blockchain.NewTransaction(&wallet, Sender, "", amount, chain)
 
 	fmt.Println(tx)
 
 	//after we make the transaction proposal, we sent it
 
 	cbTx := blockchain.CoinbaseTx(Sender, "", amount)
-	network.SendTx(network.KnownNodes[0], cbTx)
+	network.SendStakeTx(network.KnownNodes[0], cbTx)
 	fmt.Println("Transaction Proposal has been sent")
 
 	fmt.Println("Success!")
@@ -330,14 +319,4 @@ func (cli *CommandLine) startNode(NodeID, Address string, forgeTime uint64) {
 	}
 
 	network.StartServer(NodeID, Address, forgeTime)
-}
-
-func (cli *CommandLine) reindexUTXO(NodeID string) {
-	chain := blockchain.NormalBlockchainProcess(NodeID)
-	defer chain.Database.Close()
-	UTXOSet := blockchain.UTXOSet{chain}
-	UTXOSet.Reindex()
-
-	count := UTXOSet.CountTransactions()
-	fmt.Println("Done! There are %d transactions in the UTXO Set.\n", count)
 }

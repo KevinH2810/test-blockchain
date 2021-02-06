@@ -28,7 +28,7 @@ type (
 )
 
 func NewTxOutput(value int, address string) *TxOutput {
-	txo := &TxOutput{value, "", nil}
+	txo := &TxOutput{value, address, nil}
 	txo.Lock([]byte(address))
 	return txo
 }
@@ -41,7 +41,7 @@ func (in *TxInput) UsesKey(pubKeyHash []byte) bool {
 
 func (out *TxOutput) Lock(address []byte) {
 	fullhash := wallet.Base58Decode(address)
-	pubKeyHash := fullhash[0 : len(fullhash)-4]
+	pubKeyHash := fullhash[:len(fullhash)-4]
 	out.PubKeyHash = pubKeyHash
 }
 

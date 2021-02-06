@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
 	"log"
 	"time"
@@ -39,7 +40,9 @@ func (b *Block) BlockHashing() []byte {
 		[]byte{},
 	)
 
-	return data
+	hash := sha256.Sum256(data)
+
+	return hash[:]
 }
 
 func Genesis(coinbase *Transaction, validator string) *Block {

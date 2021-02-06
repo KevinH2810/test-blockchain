@@ -2,40 +2,38 @@ package wallet
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"fmt"
 	"log"
-	"os"
 
 	"golang.org/x/crypto/ripemd160"
 )
 
 type (
 	Wallet struct {
-		PrivateKey []byte
+		PrivateKey ecdsa.PrivateKey
 		Publickey  []byte
 	}
 )
 
 const (
+	version        = byte(0x00)
 	checksumLength = 4
 )
 
-func NewPairKey() ([]byte, []byte) {
-	private, err := rsa.GenerateKey(rand.Reader, 2048)
+func NewPairKey() (ecdsa.PrivateKey, []byte) {
+	curve := elliptic.P256()
+
+	private, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
-		fmt.Printf("Cannot generate RSA key\n")
-		os.Exit(1)
+		log.Panic(err)
 	}
-	public := &private.PublicKey
 
-	publicKey := x509.MarshalPKCS1PublicKey(public)
-	privateKey := x509.MarshalPKCS1PrivateKey(private)
-
-	return privateKey, publicKey
+	pub := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
+	return *private, pub
 }
 
 func MakeWallet() *Wallet {
@@ -46,8 +44,10 @@ func MakeWallet() *Wallet {
 }
 
 func PublicKeyHash(pubKey []byte) []byte {
+	pubHash := sha256.Sum256(pubKey)
+
 	hasher := ripemd160.New()
-	_, err := hasher.Write(pubKey)
+	_, err := hasher.Write(pubHash[:])
 	if err != nil {
 		log.Panic(err)
 	}
@@ -66,21 +66,24 @@ func Checksum(payload []byte) []byte {
 
 func ValidateAddress(address string) bool {
 	pubKeyHash := Base58Decode([]byte(address))
-
 	actualChecksum := pubKeyHash[len(pubKeyHash)-checksumLength:]
-	pubKeyHash = pubKeyHash[:len(pubKeyHash)-checksumLength]
-	targetChecksum := Checksum(pubKeyHash)
+	version := pubKeyHash[0]
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-checksumLength]
+	targetChecksum := Checksum(append([]byte{version}, pubKeyHash...))
 
 	return bytes.Compare(actualChecksum, targetChecksum) == 0
 }
 
 func (wallet *Wallet) Address() []byte {
 	pubHash := PublicKeyHash(wallet.Publickey)
-	checksum := Checksum(pubHash)
+	versionedHash := append([]byte{version}, pubHash...)
+	checksum := Checksum(versionedHash)
 
-	fullHash := append(pubHash, checksum...)
-
+	fullHash := append(versionedHash, checksum...)
 	address := Base58Encode(fullHash)
+
+	return address
+	fmt.Println("Public Key Hash - ", pubHash)
 	fmt.Printf("address: %x\n", address)
 
 	return address

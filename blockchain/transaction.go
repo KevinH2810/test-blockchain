@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -43,14 +44,14 @@ func CoinbaseTx(to, data string, value int) *Transaction {
 	return &tx
 }
 
-func NewTransaction(w *wallet.Wallet, Sender, Receiver string, amount int, UTXO *UTXOSet) *Transaction {
+func NewTransaction(w *wallet.Wallet, Sender, Receiver string, amount int, chain *Blockchain) *Transaction {
 	var (
 		inputs  []TxInput
 		outputs []TxOutput
 	)
 
 	pubKeyHash := wallet.PublicKeyHash(w.Publickey)
-	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
+	acc, validOutputs := chain.FindSpendableOutputs(pubKeyHash, amount)
 
 	if acc < amount {
 		log.Panic("Error: Not enough funds")
@@ -82,7 +83,7 @@ func NewTransaction(w *wallet.Wallet, Sender, Receiver string, amount int, UTXO 
 
 	tx := Transaction{nil, inputs, outputs}
 	tx.ID = tx.Hash()
-	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
+	chain.SignTransaction(&tx, w.PrivateKey)
 
 	return &tx
 }
@@ -135,7 +136,7 @@ func (tx *Transaction) Hash() []byte {
 	return hash[:]
 }
 
-func (tx *Transaction) Sign(privKey *rsa.PrivateKey, prevTXs map[string]Transaction) {
+func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
 	if tx.isCoinbase() {
 		return
 	}
@@ -152,16 +153,15 @@ func (tx *Transaction) Sign(privKey *rsa.PrivateKey, prevTXs map[string]Transact
 		prevTX := prevTXs[hex.EncodeToString(in.ID)]
 		txCopy.Inputs[inId].Signature = nil
 		txCopy.Inputs[inId].PubKey = prevTX.Outputs[in.Out].PubKeyHash
-		txCopy.ID = txCopy.Hash()
-		txCopy.Inputs[inId].PubKey = nil
 
-		signature, err := rsa.SignPSS(rand.Reader, privKey, crypto.SHA256, txCopy.ID, nil)
-		if err != nil {
-			panic(err)
-		}
+		dataToSign := fmt.Sprintf("%x\n", txCopy)
+
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
+		Handler(err)
+		signature := append(r.Bytes(), s.Bytes()...)
 
 		tx.Inputs[inId].Signature = signature
-
+		txCopy.Inputs[inId].PubKey = nil
 	}
 }
 
@@ -237,7 +237,7 @@ func (tx Transaction) String() string {
 	return strings.Join(lines, "\n")
 }
 
-func (bc *Blockchain) SignTransaction(tx *Transaction, privKey []byte) {
+func (bc *Blockchain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey) {
 	prevTXs := make(map[string]Transaction)
 
 	for _, in := range tx.Inputs {
@@ -246,10 +246,5 @@ func (bc *Blockchain) SignTransaction(tx *Transaction, privKey []byte) {
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 
-	parsedPrivKey, err := x509.ParsePKCS1PrivateKey(privKey)
-	if err != nil {
-		log.Panic("Error = ", err)
-	}
-
-	tx.Sign(parsedPrivKey, prevTXs)
+	tx.Sign(privKey, prevTXs)
 }
