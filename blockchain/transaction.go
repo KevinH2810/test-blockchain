@@ -25,7 +25,7 @@ type (
 )
 
 //CoinbaseTx is reward function
-func CoinbaseTx(to, data string) *Transaction {
+func CoinbaseTx(to, data string, value int) *Transaction {
 	if data == "" {
 		randData := make([]byte, 24)
 		_, err := rand.Read(randData)
@@ -34,8 +34,8 @@ func CoinbaseTx(to, data string) *Transaction {
 		data = fmt.Sprintf("%x", randData)
 	}
 
-	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTxOutput(20, to)
+	txin := TxInput{[]byte{}, "", -1, nil, []byte(data)}
+	txout := NewTxOutput(value, to)
 
 	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}}
 	tx.ID = tx.Hash()
@@ -43,17 +43,14 @@ func CoinbaseTx(to, data string) *Transaction {
 	return &tx
 }
 
-func NewTransaction(Sender, Receiver string, amount int, chain *Blockchain) *Transaction {
+func NewTransaction(w *wallet.Wallet, Sender, Receiver string, amount int, UTXO *UTXOSet) *Transaction {
 	var (
 		inputs  []TxInput
 		outputs []TxOutput
 	)
 
-	wallets, err := wallet.CreateWallet()
-	Handler(err)
-	w := wallets.GetWalletFromAddress(Sender)
 	pubKeyHash := wallet.PublicKeyHash(w.Publickey)
-	acc, validOutputs := chain.FindSpendableOutputs(pubKeyHash, amount)
+	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
 
 	if acc < amount {
 		log.Panic("Error: Not enough funds")
@@ -64,20 +61,28 @@ func NewTransaction(Sender, Receiver string, amount int, chain *Blockchain) *Tra
 		Handler(err)
 
 		for _, out := range outs {
-			input := TxInput{txID, out, nil, w.Publickey}
+			input := TxInput{txID, Sender, out, nil, w.Publickey}
 			inputs = append(inputs, input)
 		}
 	}
 
+	from := fmt.Sprintf("%s", w.Address())
+
 	outputs = append(outputs, *NewTxOutput(amount, Receiver))
 
+	// fee := amount / 10
+
+	// if acc > amount+fee {
+	// 	outputs = append(outputs, TxOutput{fee, acc - (fee + amount), pubKeyHash})
+	// }
+
 	if acc > amount {
-		outputs = append(outputs, TxOutput{acc - amount, pubKeyHash})
+		outputs = append(outputs, TxOutput{acc - amount, from, pubKeyHash})
 	}
 
 	tx := Transaction{nil, inputs, outputs}
 	tx.ID = tx.Hash()
-	chain.SignTransaction(&tx, w.PrivateKey)
+	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
 
 	return &tx
 }
@@ -108,6 +113,15 @@ func (tx Transaction) Serialize() []byte {
 	Handler(err)
 
 	return encoded.Bytes()
+}
+
+func DeserializeTransaction(data []byte) Transaction {
+	var transaction Transaction
+
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	err := decoder.Decode(&transaction)
+	Handler(err)
+	return transaction
 }
 
 func (tx *Transaction) Hash() []byte {
@@ -189,11 +203,12 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 	var outputs []TxOutput
 
 	for _, in := range tx.Inputs {
-		inputs = append(inputs, TxInput{in.ID, in.Out, nil, nil})
+		inputs = append(inputs, TxInput{in.ID, in.SenderAddress, in.Out, nil, nil})
 	}
 
 	for _, out := range tx.Outputs {
-		outputs = append(outputs, TxOutput{out.Value, out.PubKeyHash})
+		// outputs = append(outputs, TxOutput{out.Fees, out.Value, out.PubKeyHash})
+		outputs = append(outputs, TxOutput{out.Value, out.Address, out.PubKeyHash})
 	}
 
 	txCopy := Transaction{tx.ID, inputs, outputs}

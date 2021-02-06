@@ -7,6 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgraph-io/badger v1.5.4
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
+	github.com/go-co-op/gocron v0.5.1
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/mr-tron/base58 v1.2.0
@@ -16,4 +17,5 @@ require (
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
 	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	gopkg.in/vrecan/death.v3 v3.0.1
 )

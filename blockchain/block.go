@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"log"
+	"time"
 )
 
 type (
@@ -11,22 +12,38 @@ type (
 		Hash        []byte
 		Transaction []*Transaction
 		PrevHash    []byte
-		Nonce       int
+		Height      int
+		Validator   string
+		Timestamp   int64
 	}
 )
 
-func CreateBlock(txs []*Transaction, prevHash []byte) *Block {
-	block := &Block{[]byte{}, txs, prevHash, 0}
-	pow := NewProof(block)
-	nonce, hash := pow.Run()
+func CreateBlock(txs []*Transaction, prevHash []byte, Validator string, height int) *Block {
+	block := &Block{[]byte{}, txs, prevHash, height, Validator, time.Now().Unix()}
+	//delete this and make function to generate Transactionhash
+	//Txhash is formed by SHA(Tx.ID) + Tx data
+	// pow := NewProof(block)
+	// nonce, hash := pow.Run()
 
-	block.Nonce = nonce
-	block.Hash = hash
+	// block.Nonce = nonce
+	// block.Hash = hash
 	return block
 }
 
-func Genesis(coinbase *Transaction) *Block {
-	return CreateBlock([]*Transaction{coinbase}, []byte{})
+func (b *Block) BlockHashing() []byte {
+	data := bytes.Join(
+		[][]byte{
+			b.PrevHash,
+			b.HashTransactions(),
+		},
+		[]byte{},
+	)
+
+	return data
+}
+
+func Genesis(coinbase *Transaction, validator string) *Block {
+	return CreateBlock([]*Transaction{coinbase}, []byte{}, validator, 0)
 }
 
 //turn Block to []byte data

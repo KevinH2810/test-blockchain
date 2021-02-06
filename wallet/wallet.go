@@ -81,8 +81,6 @@ func (wallet *Wallet) Address() []byte {
 	fullHash := append(pubHash, checksum...)
 
 	address := Base58Encode(fullHash)
-	fmt.Printf("public key : %x\n", wallet.Publickey)
-	fmt.Printf("private hash : %x\n", wallet.PrivateKey)
 	fmt.Printf("address: %x\n", address)
 
 	return address

@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	walletFilePath = "./tmp/wallets.data"
+	walletFilePath = "./tmp/wallets_%s.data"
 )
 
 type (
@@ -20,11 +20,11 @@ type (
 	}
 )
 
-func CreateWallet() (*Wallets, error) {
+func CreateWallet(NodeId string) (*Wallets, error) {
 	wallets := Wallets{}
 	wallets.Wallets = make(map[string]*Wallet)
 
-	err := wallets.LoadFile()
+	err := wallets.LoadFile(NodeId)
 
 	return &wallets, err
 }
@@ -52,8 +52,12 @@ func (ws *Wallets) AddNewWallet() string {
 	return address
 }
 
-func (ws *Wallets) SaveFile() {
-	var content bytes.Buffer
+func (ws *Wallets) SaveFile(nodeId string) {
+	var (
+		content bytes.Buffer
+	)
+
+	walletFile := fmt.Sprintf(walletFilePath, nodeId)
 	gob.Register(elliptic.P256())
 
 	encoder := gob.NewEncoder(&content)
@@ -62,19 +66,23 @@ func (ws *Wallets) SaveFile() {
 		log.Panic(err)
 	}
 
-	err = ioutil.WriteFile(walletFilePath, content.Bytes(), 0644)
+	err = ioutil.WriteFile(walletFile, content.Bytes(), 0644)
 	if err != nil {
 		log.Panic(err)
 	}
 }
 
-func (ws *Wallets) LoadFile() error {
-	var wallets Wallets
-	if _, err := os.Stat(walletFilePath); os.IsNotExist(err) {
+func (ws *Wallets) LoadFile(nodeId string) error {
+	var (
+		wallets Wallets
+	)
+
+	walletFile := fmt.Sprintf(walletFilePath, nodeId)
+	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
 		return err
 	}
 
-	fileContent, err := ioutil.ReadFile(walletFilePath)
+	fileContent, err := ioutil.ReadFile(walletFile)
 	if err != nil {
 		log.Panic(err)
 	}
