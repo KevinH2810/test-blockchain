@@ -12,9 +12,8 @@ import (
 	"os"
 	"runtime"
 	"syscall"
-	"time"
 
-	"github.com/go-co-op/gocron"
+	"github.com/jasonlvhit/gocron"
 	"github.com/test-blockchain/blockchain"
 	"gopkg.in/vrecan/death.v3"
 )
@@ -27,8 +26,8 @@ const (
 
 var (
 	nodeAddress        string
-	validateAddress    string
-	KnownNodes         = []string{"localhost:10111", "localhost:10112", "localhost:10113", "localhost:10114"}
+	NodeAddress        string
+	KnownNodes         = []string{0: "localhost:10111", 1: "localhost:10112", 2: "localhost:10113", 3: "localhost:10114"}
 	blocksInTransit    = [][]byte{}
 	memoryPool         = make(map[string]blockchain.Transaction)
 	tempTxPool         []string
@@ -123,7 +122,7 @@ func CloseDB(chain *blockchain.Blockchain) {
 
 func StartServer(nodeID, ForgerAddress string, forgeTime uint64) {
 	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
-	validateAddress = ForgerAddress
+	NodeAddress = ForgerAddress
 	ln, err := net.Listen(protocol, nodeAddress)
 	if err != nil {
 		log.Panic(err)
@@ -138,21 +137,14 @@ func StartServer(nodeID, ForgerAddress string, forgeTime uint64) {
 		SendVersion(KnownNodes[0], chain)
 	}
 
+	fmt.Println("KnownNodes = ", KnownNodes)
+	fmt.Println("nodeAddress = ", nodeAddress)
+
 	if nodeAddress == KnownNodes[0] {
-		currentChain = chain
-		go func() {
-			for candidateTx := range candidateTxs {
-				mutex.Lock()
-				if chain.VerifyTransaction(&candidateTx) {
-					tempStakeTxPool[hex.EncodeToString(candidateTx.ID)] = candidateTx
-				} else {
-					validatorBlacklist = append(validatorBlacklist, candidateTx.Inputs[0].SenderAddress)
-				}
-				mutex.Unlock()
-			}
-		}()
-		go func() { StartForgeTimer(forgeTime) }()
+		fmt.Println("Start ForgeTimer")
+		go func() { StartForgeTimer(chain, forgeTime) }()
 	}
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -174,9 +166,26 @@ func GobEncode(data interface{}) []byte {
 	return buff.Bytes()
 }
 
-func StartForgeTimer(forgeTiming uint64) {
-	schedulerNetwork := gocron.NewScheduler(time.UTC)
-	schedulerNetwork.Every(forgeTiming).Seconds().Do(PickWinner)
+func StartForgeTimer(chain *blockchain.Blockchain, forgeTiming uint64) {
+	if nodeAddress == KnownNodes[0] {
+
+		currentChain = chain
+		go func() {
+			for candidateTx := range candidateTxs {
+				mutex.Lock()
+				if chain.VerifyTransaction(&candidateTx) {
+					tempStakeTxPool[hex.EncodeToString(candidateTx.ID)] = candidateTx
+				} else {
+					validatorBlacklist = append(validatorBlacklist, candidateTx.Inputs[0].SenderAddress)
+				}
+				mutex.Unlock()
+			}
+		}()
+	}
+
+	fmt.Println("gocron run")
+	gocron.Every(5).Second().Do(PickWinner)
+	<-gocron.Start()
 }
 
 func HandleConnection(conn net.Conn, chain *blockchain.Blockchain) {

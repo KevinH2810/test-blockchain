@@ -19,10 +19,12 @@ type (
 )
 
 func (cli *CommandLine) printUsage() {
+	fmt.Println()
 	fmt.Println("Print Usage :")
 	fmt.Println("getBalance - address ADDRESS - get balance for the ADDRESS")
 	fmt.Println("createblockchain - address ADDRESS - create blockchain for the ADDRESS")
-	fmt.Println("send -sender SENDER -receiver RECEIVER -amount AMOUNT -forge - send amount from Sender to Receiver")
+	fmt.Println("send -from SENDER -to RECEIVER -amount AMOUNT - send amount from Sender to Receiver")
+	fmt.Println("staketx -from SENDER -amount AMOUNT - send StakeTx to compete for forging block")
 	fmt.Println("printchain - prints the block in the chain")
 	fmt.Println("createwallet - Create new wallet")
 	fmt.Println("listaddress - list addresses in our wallet")
@@ -69,6 +71,7 @@ func (cli *CommandLine) Run() {
 	getBalanceCmd := flag.NewFlagSet("getBalance", flag.ExitOnError)
 	createBlockchainCmd := flag.NewFlagSet("createBlockchain", flag.ExitOnError)
 	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
+	stakeTxCmd := flag.NewFlagSet("stakeTx", flag.ExitOnError)
 	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
 	createNewWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
 	getAllWalletAddressCmd := flag.NewFlagSet("getaddress", flag.ExitOnError)
@@ -79,9 +82,12 @@ func (cli *CommandLine) Run() {
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "the address of the blockchain maker")
 	sendFrom := sendCmd.String("from", "", "Source wallet addres")
 	sendTo := sendCmd.String("to", "", "Destination wallet address")
-	sendForge := sendCmd.Bool("forge", false, "set being a forge network")
 	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
-	startNodeMiner := startNodeCmd.String("forger", "", "Enable forger mode to send reward to ADDRESS")
+
+	stakeTxFrom := stakeTxCmd.String("from", "", "Source wallet addres")
+	stakeTxAmount := stakeTxCmd.Int("amount", 0, "Amount to send")
+
+	startNodeAddress := startNodeCmd.String("address", "", "Enable forger mode to send reward to ADDRESS")
 	startNodeTimeForge := startNodeCmd.Uint64("timeforge", 0, "Enable mining mode and send reward to ADDRESS")
 
 	switch os.Args[1] {
@@ -90,6 +96,9 @@ func (cli *CommandLine) Run() {
 		blockchain.Handler(err)
 	case "send":
 		err := sendCmd.Parse(os.Args[2:])
+		blockchain.Handler(err)
+	case "staketx":
+		err := stakeTxCmd.Parse(os.Args[2:])
 		blockchain.Handler(err)
 	case "createblockchain":
 		err := createBlockchainCmd.Parse(os.Args[2:])
@@ -148,7 +157,7 @@ func (cli *CommandLine) Run() {
 			startNodeCmd.Usage()
 			runtime.Goexit()
 		}
-		cli.startNode(nodeID, *startNodeMiner, *startNodeTimeForge)
+		cli.startNode(nodeID, *startNodeAddress, *startNodeTimeForge)
 	}
 
 	if sendCmd.Parsed() {
@@ -156,7 +165,15 @@ func (cli *CommandLine) Run() {
 			sendCmd.Usage()
 			runtime.Goexit()
 		}
-		cli.send(*sendFrom, *sendTo, nodeID, *sendAmount, *sendForge)
+		cli.send(*sendFrom, *sendTo, nodeID, *sendAmount)
+	}
+
+	if stakeTxCmd.Parsed() {
+		if *stakeTxFrom == "" {
+			sendCmd.Usage()
+			runtime.Goexit()
+		}
+		cli.sendStake(*stakeTxFrom, nodeID, *stakeTxAmount)
 	}
 
 	if createBlockchainCmd.Parsed() {
@@ -200,12 +217,11 @@ func (cli *CommandLine) getBalance(address, NodeId string) {
 //send function with param Sender, Receiver and Amount. to send normal sendTx function
 //fill all parameters
 //empty Receiver && Amount is a StakeTx
-func (cli *CommandLine) send(Sender, Receiver, NodeId string, amount int, proposeForge bool) {
+func (cli *CommandLine) send(Sender, Receiver, NodeId string, amount int) {
 	if !wallet.ValidateAddress(Sender) {
 		log.Panic("Sender is not valid!")
 	}
-
-	if Receiver != "" && !wallet.ValidateAddress(Receiver) {
+	if Receiver == "" {
 		log.Panic("Receiver is not valid!")
 	}
 
@@ -223,18 +239,8 @@ func (cli *CommandLine) send(Sender, Receiver, NodeId string, amount int, propos
 
 	fmt.Println(tx)
 
-	if proposeForge {
-		//after we make the transaction proposal, we sent it
-		if Receiver != "" {
-			log.Panic("please empty the sender address")
-		}
-		cbTx := blockchain.CoinbaseTx(Sender, "", amount)
-		network.SendTx(network.KnownNodes[0], cbTx)
-		fmt.Println("Transaction Proposal has been sent")
-	} else {
-		network.SendTx(network.KnownNodes[0], tx)
-		fmt.Println("Transaction Proposal has been sent")
-	}
+	network.SendTx(network.KnownNodes[0], tx)
+	fmt.Println("Transaction Proposal has been sent")
 
 	//the normal transaction should be pushed to the txPool to be forged into one block later
 
@@ -256,7 +262,35 @@ func (cli *CommandLine) send(Sender, Receiver, NodeId string, amount int, propos
 
 	// chain.ForgeBlock([]*blockchain.Transaction{cbTx, tx}, Sender)
 
-	fmt.Println("Success!", tx)
+	fmt.Println("Success!")
+}
+
+func (cli *CommandLine) sendStake(Sender, NodeId string, amount int) {
+	if !wallet.ValidateAddress(Sender) {
+		log.Panic("Sender is not valid!")
+	}
+
+	chain := blockchain.NormalBlockchainProcess(NodeId)
+	UTXOSet := blockchain.UTXOSet{chain}
+	defer chain.Database.Close()
+
+	wallets, err := wallet.CreateWallet(NodeId)
+	if err != nil {
+		log.Panic(err)
+	}
+	wallet := wallets.GetWalletFromAddress(NodeId)
+
+	tx := blockchain.NewTransaction(&wallet, Sender, "", amount, &UTXOSet)
+
+	fmt.Println(tx)
+
+	//after we make the transaction proposal, we sent it
+
+	cbTx := blockchain.CoinbaseTx(Sender, "", amount)
+	network.SendTx(network.KnownNodes[0], cbTx)
+	fmt.Println("Transaction Proposal has been sent")
+
+	fmt.Println("Success!")
 }
 
 func (cli *CommandLine) listWalletAddress(NodeID string) {
@@ -276,12 +310,16 @@ func (cli *CommandLine) createWallet(NodeId string) {
 	fmt.Printf("New address is %s\n", address)
 }
 
-func (cli *CommandLine) startNode(NodeID, forgerAddress string, forgeTime uint64) {
+func (cli *CommandLine) startNode(NodeID, Address string, forgeTime uint64) {
 	fmt.Printf("Starting Node :%s\n", NodeID)
 
-	if len(forgerAddress) > 0 {
-		if wallet.ValidateAddress(forgerAddress) {
-			fmt.Println("Forging priviledge is activated. address to receive rewards : %s", forgerAddress)
+	if len(Address) == 0 {
+		log.Panic("no address inputed")
+	}
+
+	if len(Address) > 0 {
+		if wallet.ValidateAddress(Address) {
+			fmt.Println("Forging priviledge is activated. address to receive rewards : %s", Address)
 		} else {
 			log.Panic("Wrong Forger address")
 		}
@@ -291,7 +329,7 @@ func (cli *CommandLine) startNode(NodeID, forgerAddress string, forgeTime uint64
 		forgeTime = uint64(30)
 	}
 
-	network.StartServer(NodeID, forgerAddress, forgeTime)
+	network.StartServer(NodeID, Address, forgeTime)
 }
 
 func (cli *CommandLine) reindexUTXO(NodeID string) {

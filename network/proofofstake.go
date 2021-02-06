@@ -1,6 +1,7 @@
 package network
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -27,8 +28,12 @@ var (
 	pendingTxs []*blockchain.Transaction
 )
 
+func TestScheduler() {
+	fmt.Println("Runned")
+}
+
 func PickWinner() {
-	time.Sleep(30 * time.Second)
+	fmt.Println("start picking lottery")
 	mutex.Lock()
 	//lock the variables
 	for _, tempId := range tempTxPool {
@@ -39,6 +44,7 @@ func PickWinner() {
 
 	}
 
+	fmt.Println("tempStakeTxPool = ", tempStakeTxPool)
 	temp := tempStakeTxPool
 	mutex.Unlock()
 
@@ -75,6 +81,8 @@ func PickWinner() {
 		s := rand.NewSource(time.Now().Unix())
 		r := rand.New(s)
 		lotteryWinner := lotterypool[r.Intn(len(lotterypool))]
+
+		fmt.Println("Winner selected = ", lotteryWinner)
 
 		TxLotteryWinner := temp[lotteryWinner]
 
